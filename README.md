@@ -93,16 +93,34 @@ Host your declarative `scene.json` on any CDN, Cloudflare R2, or AWS S3:
 
 | Prop | Type | Default | Description |
 |---|---|---|---|
-| `scene` | `NivoSceneData` | `undefined` | Declarative 3D scene data JSON |
-| `src` | `string` | `undefined` | Remote URL to fetch `scene.json` dynamically |
-| `cameraControls` | `boolean` | `true` | Orbit controls (drag to orbit, pinch to zoom) |
-| `autoPlay` | `boolean` | `true` | Automatically plays timeline keyframe animations |
+| `scene` | `NivoSceneData` | `undefined` | Declarative 3D scene data JSON exported from Nivo 3D Studio |
+| `sceneData` | `NivoSceneData` | `undefined` | *(Backward-compatible alias for `scene`)* |
+| `src` | `string` | `undefined` | Remote URL to fetch `scene.json` dynamically from CDN or R2 |
+| `cameraControls` | `boolean` | `true` | Orbit controls (orbit, pan, pinch to zoom) |
+| `touchMode` | `'scroll-priority' \| 'rotate-priority' \| 'auto'` | `'scroll-priority'` | Mobile touch strategy: `'scroll-priority'` allows single-finger vertical page scroll and two-finger orbit; `'rotate-priority'` allows single-finger 3D rotation |
+| `sleepWhenHidden` | `boolean` | `true` | Sleep render loop to 0 FPS when browser tab is hidden (Page Visibility API) |
+| `autoPlay` | `boolean` | `true` | Automatically plays GLTF model animations and timeline keyframes |
 | `lazy` | `boolean` | `true` | Defer WebGL mounting until element scrolls into viewport |
 | `rootMargin` | `string` | `'200px'` | Pre-initialization margin distance for lazy loading |
 | `posterUrl` | `string` | `undefined` | Static fallback image placeholder during WebGL compilation |
 | `className` | `string` | `undefined` | Optional CSS class name for wrapper container |
 | `style` | `React.CSSProperties` | `undefined` | Optional inline CSS styles for wrapper |
-| `onLoad` | `(scene) => void` | `undefined` | Callback fired once the scene finishes mounting |
+| `onLoad` | `(scene: NivoSceneData) => void` | `undefined` | Callback fired once the scene finishes mounting |
+| `onContextLost` | `() => void` | `undefined` | Callback fired when WebGL GPU context loss occurs |
+| `onContextRestored` | `() => void` | `undefined` | Callback fired after WebGL context is restored and canvas remounts |
+| `fallback` | `React.ReactNode` | `null` | Optional fallback element while remote scene is loading |
+
+---
+
+## 🌐 Supported Framework Matrix
+
+| Framework | Version Profile | Route / Component Model | Status |
+|---|---|---|---|
+| **Next.js** | `16.4.x` (Active LTS) | App Router (RSC `<NivoSceneClient>`) & Pages Router | ✅ Verified |
+| **Next.js** | `15.5.x` (Maintenance) | App Router & Pages Router | ✅ Verified |
+| **React** | `^18.3.1` \| `^19.0.0` | Client Component / SPA | ✅ Verified |
+| **Vite** | `^5.0.0` \| `^6.0.0` | React Single Page App | ✅ Verified |
+| **Astro** | `^4.0.0` \| `^5.0.0` | `client:visible` / `client:load` Island | ✅ Verified |
 
 ---
 

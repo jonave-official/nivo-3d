@@ -72,11 +72,18 @@ export interface NivoSceneData {
   };
 }
 
+export type NivoTouchMode = 'auto' | 'scroll-priority' | 'rotate-priority';
+
 export interface NivoViewerProps {
   /**
    * The declarative scene data object exported from Nivo 3D Studio.
    */
   scene?: NivoSceneData;
+  /**
+   * Alias for `scene`. Maintained for backwards compatibility.
+   * @deprecated Use `scene` instead.
+   */
+  sceneData?: NivoSceneData;
   /**
    * Optional URL to load scene.json dynamically from a CDN or cloud storage.
    */
@@ -94,6 +101,19 @@ export interface NivoViewerProps {
    * @default true
    */
   cameraControls?: boolean;
+  /**
+   * Mobile touch interaction strategy.
+   * - 'scroll-priority' (default): Single finger swipes vertically scroll the host page; two fingers orbit and pinch-zoom.
+   * - 'rotate-priority': Single finger orbits the 3D scene directly (touch-action: none).
+   * - 'auto': Chooses rotate-priority for full-height viewports (>=700px), scroll-priority otherwise.
+   * @default 'scroll-priority'
+   */
+  touchMode?: NivoTouchMode;
+  /**
+   * Whether to sleep the render loop to 0 FPS when the browser tab is hidden (Page Visibility API).
+   * @default true
+   */
+  sleepWhenHidden?: boolean;
   /**
    * Whether to auto-play scene animations.
    * @default true
@@ -118,6 +138,14 @@ export interface NivoViewerProps {
    */
   onLoad?: (scene: NivoSceneData) => void;
   /**
+   * Callback fired when WebGL context loss is detected.
+   */
+  onContextLost?: () => void;
+  /**
+   * Callback fired after WebGL context is restored and canvas remounts.
+   */
+  onContextRestored?: () => void;
+  /**
    * Fallback UI to render while loading.
    */
   fallback?: React.ReactNode;
@@ -125,9 +153,14 @@ export interface NivoViewerProps {
 
 export interface NivoSceneClientProps {
   /**
-   * Required serializable scene data passed across the React Server Component boundary.
+   * Declarative scene data passed across the React Server Component boundary.
    */
-  sceneData: NivoSceneData;
+  scene?: NivoSceneData;
+  /**
+   * Alias for `scene`. Maintained for backwards compatibility.
+   * @deprecated Use `scene` instead.
+   */
+  sceneData?: NivoSceneData;
   /**
    * Optional CSS class name for the wrapper container.
    */
@@ -141,6 +174,16 @@ export interface NivoSceneClientProps {
    * @default true
    */
   cameraControls?: boolean;
+  /**
+   * Mobile touch interaction strategy.
+   * @default 'scroll-priority'
+   */
+  touchMode?: NivoTouchMode;
+  /**
+   * Whether to sleep the render loop to 0 FPS when the browser tab is hidden.
+   * @default true
+   */
+  sleepWhenHidden?: boolean;
   /**
    * Whether to auto-play scene animations.
    * @default true
@@ -160,4 +203,12 @@ export interface NivoSceneClientProps {
    * Static poster image URL to display before the WebGL canvas mounts or while loading.
    */
   posterUrl?: string;
+  /**
+   * Callback fired when WebGL context loss is detected.
+   */
+  onContextLost?: () => void;
+  /**
+   * Callback fired after WebGL context is restored and canvas remounts.
+   */
+  onContextRestored?: () => void;
 }

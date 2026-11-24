@@ -10,7 +10,7 @@ import React, { useEffect, useState, useRef, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, useGLTF, useAnimations } from '@react-three/drei';
 import * as THREE from 'three';
-import type { NivoSceneData, NivoSceneObject, NivoViewerProps } from './types';
+import type { NivoSceneData, NivoSceneObject, NivoViewerProps, NivoTouchMode } from './types';
 import { resolveNivoAsset } from './assets';
 
 function MeshRenderer({ obj }: { obj: NivoSceneObject }) {
@@ -48,7 +48,7 @@ function MeshRenderer({ obj }: { obj: NivoSceneObject }) {
   );
 }
 
-function ModelRenderer({ obj }: { obj: NivoSceneObject }) {
+function ModelRenderer({ obj, autoPlay = true }: { obj: NivoSceneObject; autoPlay?: boolean }) {
   if (!obj.modelUrl) return null;
   const resolvedUrl = resolveNivoAsset(obj.modelUrl);
   const { scene, animations } = useGLTF(resolvedUrl);
@@ -59,9 +59,13 @@ function ModelRenderer({ obj }: { obj: NivoSceneObject }) {
   useEffect(() => {
     if (animations && animations.length > 0) {
       const firstAction = actions[animations[0].name];
-      firstAction?.reset().fadeIn(0.2).play();
+      if (autoPlay) {
+        firstAction?.reset().fadeIn(0.2).play();
+      } else {
+        firstAction?.stop();
+      }
     }
-  }, [actions, animations]);
+  }, [actions, animations, autoPlay]);
 
   return (
     <primitive
@@ -91,9 +95,37 @@ function LightRenderer({ obj }: { obj: NivoSceneObject }) {
   return <directionalLight position={position} color={color} intensity={intensity} castShadow />;
 }
 
-function SceneStage({ data, cameraControls }: { data: NivoSceneData; cameraControls: boolean }) {
+function SceneStage({
+  data,
+  cameraControls,
+  autoPlay,
+  effectiveTouchMode,
+  onCameraChange,
+  restoredCameraState
+}: {
+  data: NivoSceneData;
+  cameraControls: boolean;
+  autoPlay: boolean;
+  effectiveTouchMode: NivoTouchMode;
+  onCameraChange?: (pos: [number, number, number], target: [number, number, number]) => void;
+  restoredCameraState?: { position: [number, number, number]; target: [number, number, number] } | null;
+}) {
   const nonWebObjects = (data.objects || []).filter(o => !o.isWebOnly && o.id !== 'defaultPageId');
   const hasLights = nonWebObjects.some(o => o.type === 'light');
+
+  const isScrollPriority = effectiveTouchMode === 'scroll-priority';
+  const touchConfig = isScrollPriority
+    ? { ONE: null as any, TWO: THREE.TOUCH.DOLLY_ROTATE }
+    : { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+
+  const controlsRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (controlsRef.current && restoredCameraState) {
+      controlsRef.current.target.set(...restoredCameraState.target);
+      controlsRef.current.update();
+    }
+  }, [restoredCameraState]);
 
   return (
     <>
@@ -106,19 +138,27 @@ function SceneStage({ data, cameraControls }: { data: NivoSceneData; cameraContr
 
       {nonWebObjects.map(obj => {
         if (obj.type === 'mesh') return <MeshRenderer key={obj.id} obj={obj} />;
-        if (obj.type === 'model') return <ModelRenderer key={obj.id} obj={obj} />;
+        if (obj.type === 'model') return <ModelRenderer key={obj.id} obj={obj} autoPlay={autoPlay} />;
         if (obj.type === 'light') return <LightRenderer key={obj.id} obj={obj} />;
         return null;
       })}
 
       {cameraControls && (
         <OrbitControls
+          ref={controlsRef}
           makeDefault
           enableDamping
           dampingFactor={0.05}
-          touches={{
-            ONE: THREE.TOUCH.ROTATE,
-            TWO: THREE.TOUCH.DOLLY_PAN,
+          touches={touchConfig}
+          onChange={(e) => {
+            if (e?.target?.object && onCameraChange) {
+              const cam = e.target.object;
+              const target = e.target.target;
+              onCameraChange(
+                [cam.position.x, cam.position.y, cam.position.z],
+                [target.x, target.y, target.z]
+              );
+            }
           }}
         />
       )}
@@ -127,26 +167,44 @@ function SceneStage({ data, cameraControls }: { data: NivoSceneData; cameraContr
 }
 
 export function NivoViewer({
-  scene: initialScene,
+  scene: sceneProp,
+  sceneData: sceneDataProp,
   src,
   className,
   style,
   cameraControls = true,
+  touchMode = 'scroll-priority',
+  sleepWhenHidden = true,
   autoPlay = true,
   lazy = true,
   rootMargin = '200px',
   posterUrl,
   onLoad,
+  onContextLost,
+  onContextRestored,
   fallback = null
 }: NivoViewerProps) {
-  void autoPlay;
+  const initialScene = sceneProp ?? sceneDataProp;
   const [sceneData, setSceneData] = useState<NivoSceneData | null>(initialScene || null);
   const [loading, setLoading] = useState<boolean>(!initialScene && !!src);
   const [canvasKey, setCanvasKey] = useState<number>(0);
   const [isInViewport, setIsInViewport] = useState<boolean>(!lazy);
   const [isRendered, setIsRendered] = useState<boolean>(false);
+  const [isTabHidden, setIsTabHidden] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const cameraStateRef = useRef<{ position: [number, number, number]; target: [number, number, number] } | null>(null);
 
+  // Tab Sleep via Page Visibility API
+  useEffect(() => {
+    if (!sleepWhenHidden || typeof document === 'undefined') return;
+    const onVisibilityChange = () => {
+      setIsTabHidden(document.visibilityState === 'hidden');
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [sleepWhenHidden]);
+
+  // Viewport IntersectionObserver
   useEffect(() => {
     if (!lazy || isInViewport) return;
     if (typeof IntersectionObserver === 'undefined') {
@@ -166,13 +224,15 @@ export function NivoViewer({
     return () => observer.disconnect();
   }, [lazy, rootMargin, isInViewport]);
 
+  // Scene update synchronization
   useEffect(() => {
     if (initialScene) {
       setSceneData(initialScene);
       onLoad?.(initialScene);
     }
-  }, [initialScene]);
+  }, [initialScene, onLoad]);
 
+  // Remote dynamic loading
   useEffect(() => {
     if (!src || initialScene) return;
     let isCancelled = false;
@@ -200,7 +260,7 @@ export function NivoViewer({
     return () => {
       isCancelled = true;
     };
-  }, [src]);
+  }, [src, initialScene, onLoad]);
 
   if (loading || !sceneData) {
     return (
@@ -232,7 +292,15 @@ export function NivoViewer({
   }
 
   const activeCamera = sceneData.objects?.find(o => o.id === sceneData.activeCameraId || o.type === 'camera');
-  const cameraPos = (activeCamera?.transform?.position as [number, number, number]) || [0, 2, 8];
+  const defaultCameraPos = (activeCamera?.transform?.position as [number, number, number]) || [0, 2, 8];
+  const initialCameraPos = cameraStateRef.current?.position || defaultCameraPos;
+
+  // Resolve responsive touch mode
+  const effectiveTouchMode: NivoTouchMode = touchMode === 'auto'
+    ? ((containerRef.current?.clientHeight ?? 500) >= 700 ? 'rotate-priority' : 'scroll-priority')
+    : touchMode;
+
+  const touchActionStyle = effectiveTouchMode === 'scroll-priority' ? 'pan-y' : 'none';
 
   return (
     <div
@@ -245,6 +313,7 @@ export function NivoViewer({
         position: 'relative',
         overflow: 'hidden',
         background: sceneData.globalEnvironment?.background || 'transparent',
+        touchAction: touchActionStyle,
         ...style
       }}
       data-nivo-generator="Nivo 3D Studio"
@@ -270,9 +339,10 @@ export function NivoViewer({
       {isInViewport ? (
         <Canvas
           key={canvasKey}
-          camera={{ position: cameraPos, fov: 45 }}
+          camera={{ position: initialCameraPos, fov: 45 }}
           shadows
           dpr={[1, 2]}
+          frameloop={isTabHidden ? 'never' : 'always'}
           gl={{ antialias: true, alpha: true, powerPreference: 'default' }}
           onCreated={({ gl }) => {
             setIsRendered(true);
@@ -280,15 +350,26 @@ export function NivoViewer({
             dom.addEventListener('webglcontextlost', (e) => {
               e.preventDefault();
               console.warn('[NivoViewer] WebGL context lost. Auto-recovering...');
+              onContextLost?.();
             }, false);
             dom.addEventListener('webglcontextrestored', () => {
               console.info('[NivoViewer] WebGL context restored. Re-mounting Canvas.');
               setCanvasKey((prev) => prev + 1);
+              onContextRestored?.();
             }, false);
           }}
         >
           <Suspense fallback={null}>
-            <SceneStage data={sceneData} cameraControls={cameraControls} />
+            <SceneStage
+              data={sceneData}
+              cameraControls={cameraControls}
+              autoPlay={autoPlay}
+              effectiveTouchMode={effectiveTouchMode}
+              restoredCameraState={cameraStateRef.current}
+              onCameraChange={(pos, target) => {
+                cameraStateRef.current = { position: pos, target };
+              }}
+            />
           </Suspense>
         </Canvas>
       ) : (
