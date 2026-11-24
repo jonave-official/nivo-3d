@@ -7,7 +7,7 @@ test('nivo-3d package integrity suite', async (t) => {
   await t.test('package.json declares valid metadata', () => {
     const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8'));
     assert.strictEqual(pkg.name, 'nivo-3d');
-    assert.strictEqual(pkg.version, '1.0.0');
+    assert.strictEqual(pkg.version, '1.0.1');
     assert.strictEqual(pkg.sideEffects, false);
     assert.ok(pkg.peerDependencies['react']);
     assert.ok(pkg.peerDependencies['three']);

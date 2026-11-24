@@ -1,6 +1,6 @@
 {
   "name": "nivo-3d",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Universal 3D Spatial Experience Component for React, Next.js, and Astro",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
