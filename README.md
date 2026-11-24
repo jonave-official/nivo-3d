@@ -109,7 +109,7 @@ Host your declarative `scene.json` on any CDN, Cloudflare R2, or AWS S3:
 ## 🛠️ Local Development
 
 ```bash
-git clone https://github.com/princesgs77/nivo-3d.git
+git clone https://github.com/jonave-official/nivo-3d.git
 cd nivo-3d
 npm install
 npm run build
